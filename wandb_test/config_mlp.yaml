@@ -1,0 +1,35 @@
+program: test_wandb.py
+method: grid
+metric:
+  name: R2_metric
+  goal: maximize
+early_terminate:
+  type: hyperband
+  min_iter: 5
+parameters:
+  in_cols:
+    value: 'seq_SwitchON_GFP'
+  out_cols:
+    value: ['ON', 'OFF']
+  qc_level:
+    values: [0.7, 1.1]
+  scaler_init:
+    values: [True, False]
+  epochs:
+    value: 200
+  filters:
+    values: [[128, 64, 32, 16], [256, 128, 64, 32, 16]]
+  optimizer:
+    value: 'adam'
+  loss_fn:
+    value: 'mae'
+  learning_rate:
+    values: [0.00075, 0.001]
+  weight_decay:
+    value: 0.0001
+  epsilon:
+    value: 0.001
+  dropout:
+    values: [0.01, 0.1]
+  batch_size:
+    value: 64
