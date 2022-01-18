@@ -1,21 +1,17 @@
 import pandas as pd
 import numpy as np
-import os
 import math
 import time
 import random
 from datetime import date
 from tqdm import tqdm
-from itertools import product
 from sklearn.preprocessing import LabelEncoder, OneHotEncoder
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
 import torch
 from torch.utils.data import Dataset, DataLoader
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.optim as optim
-from network import U_Net as FCNNet
 from utils import get_config
 
 
@@ -64,62 +60,6 @@ def load_sequences_and_targets(in_cols, out_cols, qc_level=1.1):
     return data_input, data_output
 
 
-def paired(x, y):
-    # A-U
-    if x == [1, 0, 0, 0] and y == [0, 0, 0, 1]:
-        return 2
-    # G-C
-    elif x == [0, 0, 1, 0] and y == [0, 1, 0, 0]:
-        return 3
-    # G-U
-    elif x == [0, 0, 1, 0] and y == [0, 0, 0, 1]:
-        return 0.8
-    # U-A
-    elif x == [0, 0, 0, 1] and y == [1, 0, 0, 0]:
-        return 2
-    # C-G
-    elif x == [0, 1, 0, 0] and y == [0, 0, 1, 0]:
-        return 3
-    # U-G
-    elif x == [0, 0, 0, 1] and y == [0, 0, 1, 0]:
-        return 0.8
-    else:
-        return 0
-
-
-def gaussian(x):
-    return math.exp(-0.5*(x*x))
-
-
-def creatmat(data):
-    mat = np.zeros([len(data), len(data)])
-    for i in range(len(data)):
-        for j in range(len(data)):
-            coefficient = 0
-            # Why 30??
-            for add in range(30):
-                if i - add >= 0 and j + add < len(data):
-                    score = paired(list(data[i - add]), list(data[j + add]))
-                    if score == 0:
-                        break
-                    else:
-                        coefficient = coefficient + score * gaussian(add)
-                else:
-                    break
-            if coefficient > 0:
-                for add in range(1, 30):
-                    if i + add < len(data) and j - add >= 0:
-                        score = paired(list(data[i + add]), list(data[j - add]))
-                        if score == 0:
-                            break
-                        else:
-                            coefficient = coefficient + score * gaussian(add)
-                    else:
-                        break
-            mat[[i], [j]] = coefficient
-    return mat
-
-
 class RNADataset(Dataset):
     def __init__(self, rna_seqs, rna_labs):
         self.rna_seqs = torch.from_numpy(rna_seqs)
@@ -132,25 +72,60 @@ class RNADataset(Dataset):
         rna_seq = self.rna_seqs[idx]
         rna_len = rna_seq.shape[0]
 
-        data_fcn = np.zeros((17, rna_len, rna_len))
-
-        # all potential base pairs
-        perm = list(product(np.arange(4), np.arange(4)))
+        data_fcn = np.zeros((7, rna_len, rna_len))
 
         # all canonical base pairs + G-U  (A-U, U-A, C-G, G-C, G-u, U-G)
-        # perm = [(0, 3), (3, 0), (1, 2), (2, 1), (2, 3), (3, 2)]
+        perm = [(0, 3), (3, 0), (1, 2), (2, 1), (2, 3), (3, 2)]
         for n, cord in enumerate(perm):
             i, j = cord
             data_fcn[n] = np.matmul(rna_seq[:, i].reshape(-1, 1), rna_seq[:, j].reshape(1, -1))
 
-        data_fcn[16] = creatmat(rna_seq)
+        data_fcn[6] = 1 - data_fcn.sum(axis=0)
+        # data_fcn[6] = creatmat(rna_seq)
 
         return data_fcn, self.rna_labs[idx]
 
 
+class CNNet(nn.Module):
+    def __init__(self, img_ch=[7, 32, 64, 128], output_ch=3):
+        super(CNNet, self).__init__()
+        kernel = 2
+        stride = 2
+        # output_size = (input - kernel_size + 2 * padding) / stride + 1
+        bloc_wd = 148
+        self.layers = nn.Sequential()
+        for th, ch in enumerate(img_ch):
+            if th < len(img_ch) - 1:
+                self.layers.add_module(name='Conv' + str(th + 1),
+                                       module=nn.Sequential(
+                                           nn.Conv2d(ch, img_ch[th + 1], kernel_size=5, stride=1, padding=1, bias=True),
+                                           nn.BatchNorm2d(img_ch[th + 1]),
+                                           nn.ReLU(inplace=True)
+                                       ))
+                bloc_wd = int((bloc_wd - 5 + 2)/1 + 1)
+                self.layers[th].add_module(name='Maxpool' + str(th + 1), module=nn.MaxPool2d(kernel_size=kernel, stride=stride))
+                bloc_wd = int((bloc_wd - kernel) / stride + 1)
+
+        self.fc = nn.Sequential(nn.Linear(img_ch[-1]*bloc_wd*bloc_wd, 16),
+                                nn.BatchNorm1d(16),
+                                nn.ReLU(inplace=True),
+                                nn.Dropout(0.3),
+                                nn.Linear(16, 16),
+                                nn.ReLU(inplace=True),
+                                nn.Linear(16, output_ch))
+
+    def forward(self, x):
+        # for layer in self.layers:
+        #     x = layer(x)
+        #     print(x.size())
+        x = self.layers(x)
+        x = torch.flatten(x, 1)
+        return self.fc(x)
+
+
 def train(contact_net, trainloader, testloader, epochs, log_epoch, patience_init, num_outputs, device):
     criterion = nn.L1Loss(reduction='mean')
-    u_optimizer = optim.Adam(contact_net.parameters())
+    u_optimizer = optim.Adam(contact_net.parameters(), lr=0.001, eps=1e-8)
     best_r2 = -math.inf
     early_stopping = False
     no_improvement_counter = 0
@@ -177,8 +152,7 @@ def train(contact_net, trainloader, testloader, epochs, log_epoch, patience_init
 
             losses.append(loss_u.item())
             total_loss += loss_u.item()
-            if batch_idx % 10 == 0 and batch_idx > 1:
-                print("current GPU used", torch.cuda.memory_allocated())
+            if batch_idx % 50 == 0 and batch_idx > 1:
                 current_loss = np.mean(losses)
                 message = 'Train: [{}/{} ({:.0f}%)]\tLoss: {:.6f}' \
                     .format((batch_idx + 1) * len(data_batch[0]), len(trainloader.dataset),
@@ -281,14 +255,13 @@ if __name__ == "__main__":
     rna_train = RNADataset(X_train, y_train)
     rna_test = RNADataset(X_test, y_test)
 
-    train_loader = DataLoader(rna_train, batch_size=64, shuffle=True, num_workers=8)
-    test_loader = DataLoader(rna_test, batch_size=64, shuffle=True, num_workers=8)
+    train_loader = DataLoader(rna_train, batch_size=32, shuffle=True, num_workers=8)
+    test_loader = DataLoader(rna_test, batch_size=32, shuffle=True, num_workers=8)
 
-    fccnet = FCNNet(img_ch=[17, 32, 64, 128], output_ch=len(params['out_cols']))
+    fccnet = CNNet(img_ch=[7, 32, 64, 128], output_ch=len(params['out_cols']))
     fccnet.to(device)
 
-    train(contact_net=fccnet, trainloader=train_loader, testloader=test_loader, epochs=10, log_epoch=1, patience_init=5,
-          num_outputs=len(params['out_cols']), device=device)
+    train(contact_net=fccnet, trainloader=train_loader, testloader=test_loader, epochs=100, log_epoch=5,
+          patience_init=20, num_outputs=len(params['out_cols']), device=device)
 
-    print('used memory', torch.cuda.max_memory_allocated())
     print('Job done!')
