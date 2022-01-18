@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import math
 import time
-import os
+import random
 from datetime import date
 from tqdm import tqdm
 from sklearn.preprocessing import LabelEncoder, OneHotEncoder, QuantileTransformer, StandardScaler
@@ -10,7 +10,6 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
 import torch
 from torch import nn
-from torch.nn import functional as F
 from torch.utils.data import DataLoader
 import wandb
 import yaml
@@ -36,7 +35,7 @@ def dna2onehot(seq):
 
 
 def load_sequences_and_targets(in_cols, out_cols, qc_level=0.7):
-    data = pd.read_csv('../../00_data/Toehold_Dataset_Final_2019-10-23.csv')
+    data = pd.read_csv('../00_data/Toehold_Dataset_Final_2019-10-23.csv')
     data.replace('T', 'U', regex=True, inplace=True)
 
     tqdm.pandas()
@@ -121,7 +120,7 @@ def criterion_mse(predicted, ground_truth):
     return loss(predicted, ground_truth)
 
 
-def launch_train(num_epochs, model, trainloader, testloader, loss_fn, loss_name, opt, out_features, patience_init, log_epoch):
+def launch_train(device, num_epochs, model, trainloader, testloader, loss_fn, loss_name, opt, out_features, patience_init, log_epoch):
     print('\nTraining in process ...')
     best_r2 = -math.inf
     early_stopping = False
@@ -134,9 +133,9 @@ def launch_train(num_epochs, model, trainloader, testloader, loss_fn, loss_name,
         batch_idx = None
         for batch_idx, load_data in enumerate(trainloader):
             inputs, targets = load_data
-            inputs, targets = inputs.float(), targets.float()
+            inputs, targets = torch.Tensor(inputs.float()).to(device), torch.Tensor(targets.float()).to(device)
 
-            targets = targets.reshape((targets.shape[0], out_features))
+            # targets = targets.reshape((targets.shape[0], out_features))
             opt.zero_grad()
             outputs = model(inputs)
             loss = loss_fn(outputs, targets)
@@ -153,12 +152,12 @@ def launch_train(num_epochs, model, trainloader, testloader, loss_fn, loss_name,
                 losses = []
 
         total_loss /= (batch_idx + 1)
-        train_loss = loss_name + '_train_loss'
+        # train_loss = loss_name + '_train_loss'
         # wandb.log({'epoch': epoch + 1, train_loss: total_loss})
         print('{} loss at epoch {}: {:.6f}'.format(loss_name, epoch + 1, total_loss))
         if (epoch + 1) % log_epoch == 0 or epoch + 1 == num_epochs:
-            val_loss, val_r2, val_mse, val_mae = launch_validation(testloader=testloader, model=model, loss_fn=loss_fn,
-                                                                   epoch=epoch, out_features=out_features)
+            val_loss, val_r2, val_mse, val_mae = launch_validation(device=device, testloader=testloader, model=model,
+                                                                   loss_fn=loss_fn, epoch=epoch, out_features=out_features)
             # wandb.log({'epoch': epoch + 1, 'r2_score': val_r2})
             # wandb.log({'epoch': epoch + 1, 'mse_score': val_mse})
             # wandb.log({'epoch': epoch + 1, 'mae_score': val_mae})
@@ -187,7 +186,7 @@ def launch_train(num_epochs, model, trainloader, testloader, loss_fn, loss_name,
                 break
 
 
-def launch_validation(testloader, model, loss_fn, epoch, out_features):
+def launch_validation(device, testloader, model, loss_fn, epoch, out_features):
     print(f'\nValidation in process at epoch {epoch + 1} ...')
     with torch.no_grad():
         model.eval()
@@ -198,7 +197,7 @@ def launch_validation(testloader, model, loss_fn, epoch, out_features):
 
         for batch_idx, load_data in enumerate(testloader):
             inputs, targets = load_data
-            inputs, targets = inputs.float(), targets.float()
+            inputs, targets = torch.Tensor(inputs.float()).to(device), torch.Tensor(targets.float()).to(device)
             targets = targets.reshape((targets.shape[0], out_features))
             # optimizer.zero_grad()
             outputs = model(inputs)
@@ -206,13 +205,13 @@ def launch_validation(testloader, model, loss_fn, epoch, out_features):
             loss = loss_fn(outputs, targets)
             final_loss += loss.item()
 
-            current_r2 = r2_score(outputs, targets, multioutput='raw_values')
+            current_r2 = r2_score(outputs.cpu(), targets.cpu(), multioutput='raw_values')
             global_r2 = [sum(x) for x in zip(global_r2, current_r2)]
 
-            current_mse = mean_squared_error(outputs, targets, multioutput='raw_values')
+            current_mse = mean_squared_error(outputs.cpu(), targets.cpu(), multioutput='raw_values')
             global_mse = [sum(x) for x in zip(global_mse, current_mse)]
 
-            current_mae = mean_absolute_error(outputs, targets, multioutput='raw_values')
+            current_mae = mean_absolute_error(outputs.cpu(), targets.cpu(), multioutput='raw_values')
             global_mae = [sum(x) for x in zip(global_mae, current_mae)]
 
         final_loss = final_loss / (batch_idx + 1)
@@ -231,7 +230,16 @@ def launch_validation(testloader, model, loss_fn, epoch, out_features):
 
 
 def train_main(config):
-    torch.manual_seed(123)
+    seed = 123
+    print("Random Seed: ", seed)
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print('device used:', device)
+    if str(device) == 'cuda':
+        torch.cuda.manual_seed(seed)
+
     in_columns = config['in_cols']
     out_columns = config['out_cols']
     num_outputs = len(out_columns)
@@ -263,6 +271,7 @@ def train_main(config):
     filters.insert(0, num_nucleotides*4)
     filters.insert(len(filters), num_outputs)
     mlp = MLP(filters=filters, dropout=config['dropout'])
+    mlp.to(device)
 
     optimizer = None
     if config['optimizer'] == 'adam':
@@ -282,7 +291,7 @@ def train_main(config):
         criterion = criterion_mse
 
     # wandb.watch(mlp, criterion, log="all")
-    launch_train(num_epochs=config['epochs'], model=mlp, trainloader=train_loader, testloader=test_loader,
+    launch_train(device=device, num_epochs=config['epochs'], model=mlp, trainloader=train_loader, testloader=test_loader,
                  loss_fn=criterion, loss_name=config['loss_fn'], opt=optimizer, out_features=num_outputs,
                  patience_init=30, log_epoch=5)
 
@@ -290,17 +299,17 @@ def train_main(config):
 if __name__ == '__main__':
     hyperparameter_defaults = dict(
         in_cols='seq_SwitchON_GFP',
-        out_cols=['ON', 'OFF'],
-        qc_level=1.1,
+        out_cols=['ON'],
+        qc_level=0.7,
         scaler_init=True,
         epochs=200,
-        filters=[128, 64, 32],
+        filters=[256, 128, 64, 32],
         optimizer='adam',
         loss_fn='mae',
-        learning_rate=0.001,
+        learning_rate=0.00075,
         weight_decay=0.000005,
         epsilon=0.00000001,
-        dropout=0.3,
+        dropout=0.1,
         batch_size=64
     )
 

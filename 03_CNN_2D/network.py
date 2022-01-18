@@ -10,9 +10,6 @@ class conv_block(nn.Module):
             nn.Conv2d(ch_in, ch_out, kernel_size=3, stride=1, padding=1, bias=True),
             nn.BatchNorm2d(ch_out),
             nn.ReLU(inplace=True),
-            nn.Conv2d(ch_out, ch_out, kernel_size=3, stride=1, padding=1, bias=True),
-            nn.BatchNorm2d(ch_out),
-            nn.ReLU(inplace=True)
         )
 
     def forward(self, x):
@@ -46,8 +43,8 @@ class U_Net(nn.Module):
             if th < len(img_ch) - 2:
                 self.layers.add_module(name='Conv' + str(th + 1), module=conv_block(ch_in=ch, ch_out=img_ch[th + 1]))
                 block_wd_test = (block_wd - kernel) / 2 + 1
-                if isinstance(block_wd_test, int):
-                    self.layers.add_module(name='Maxpool', module=nn.MaxPool2d(kernel_size=kernel, stride=stride))
+                if block_wd_test == int(block_wd_test):
+                    self.layers.add_module(name='Maxpool' + str(th + 1), module=nn.MaxPool2d(kernel_size=kernel, stride=stride))
                     block_wd = block_wd_test
                 else:
                     pass
