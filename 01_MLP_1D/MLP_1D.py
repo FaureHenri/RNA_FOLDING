@@ -1,3 +1,5 @@
+import os.path
+
 import pandas as pd
 import numpy as np
 import math
@@ -11,8 +13,6 @@ from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
-import wandb
-import yaml
 
 
 # Helper function to pass string DNA/RNA sequence to one-hot
@@ -36,27 +36,32 @@ def dna2onehot(seq):
 
 def load_sequences_and_targets(in_cols, out_cols, qc_level=0.7):
     data = pd.read_csv('../00_data/Toehold_Dataset_Final_2019-10-23.csv')
-    data.replace('T', 'U', regex=True, inplace=True)
+    if os.path.isfile('rna_encoded.csv'):
+        df_data_input = pd.read_csv('rna_encoded.csv')
+    else:
+        data.replace('T', 'U', regex=True, inplace=True)
 
-    tqdm.pandas()
+        tqdm.pandas()
 
-    input_cols = in_cols
-    output_cols = out_cols
+        # Perform QC checks and drop rows with NaN outputs
+        data = data[data.QC_ON_OFF >= qc_level].dropna(subset=out_cols)
 
-    # Perform QC checks and drop rows with NaN outputs
-    data = data[data.QC_ON_OFF >= qc_level].dropna(subset=output_cols)
+        # Show sample of dataframe structure
+        # print(00_data.head())
 
-    # Show sample of dataframe structure
-    # print(00_data.head())
-
-    print(f'Data encoding in process...')
-    time.sleep(1)
-    data_tmp = data[input_cols]
-    df_data_input_tmp = data_tmp.progress_apply(dna2onehot)
-    data_input = np.array(list(df_data_input_tmp.values))
+        print(f'Data encoding in process...')
+        time.sleep(1)
+        data_tmp = data[in_cols]
+        df_data_input = data_tmp.progress_apply(dna2onehot)
+        data_input = np.array(list(df_data_input.values))
+        len_seqs = len(data_input[0])
+        num_nucleotides = len(data_input[0][0])
+        data_input = data_input.reshape(-1, len_seqs*num_nucleotides)
+        df_data_input = pd.DataFrame(data_input)
+        df_data_input.to_csv('rna_encoded.csv', index=False, header=False)
 
     # Data Output selection (QC filtered, OutColumns Only & Drop NaNs)
-    df_data_output = data[output_cols]
+    df_data_output = data[out_cols]
     data_output = df_data_output.values.astype('float32')
 
     return data_input, data_output
@@ -205,13 +210,13 @@ def launch_validation(device, testloader, model, loss_fn, epoch, out_features):
             loss = loss_fn(outputs, targets)
             final_loss += loss.item()
 
-            current_r2 = r2_score(outputs.cpu(), targets.cpu(), multioutput='raw_values')
+            current_r2 = r2_score(targets.cpu(), outputs.cpu(), multioutput='raw_values')
             global_r2 = [sum(x) for x in zip(global_r2, current_r2)]
 
-            current_mse = mean_squared_error(outputs.cpu(), targets.cpu(), multioutput='raw_values')
+            current_mse = mean_squared_error(targets.cpu(), outputs.cpu(), multioutput='raw_values')
             global_mse = [sum(x) for x in zip(global_mse, current_mse)]
 
-            current_mae = mean_absolute_error(outputs.cpu(), targets.cpu(), multioutput='raw_values')
+            current_mae = mean_absolute_error(targets.cpu(), outputs.cpu(), multioutput='raw_values')
             global_mae = [sum(x) for x in zip(global_mae, current_mae)]
 
         final_loss = final_loss / (batch_idx + 1)
@@ -245,10 +250,9 @@ def train_main(config):
     num_outputs = len(out_columns)
 
     data_in, data_out = load_sequences_and_targets(in_cols=in_columns, out_cols=out_columns, qc_level=config['qc_level'])
-    num_nucleotides = len(data_in[0])
-    print(f'Number of nucleotides per sequence: {num_nucleotides}')
+    len_seqs = len(data_in[0])
+    print(f'Number of nucleotides per sequence: {len_seqs}')
 
-    data_in = data_in.reshape(-1, num_nucleotides * 4)
     dataix, dataiy = data_in.shape
     print(f'data_in shape: ({dataix}, {dataiy})')
 
@@ -268,7 +272,7 @@ def train_main(config):
     test_loader = DataLoader(rna_test, batch_size=config['batch_size'], shuffle=True, num_workers=0)
 
     filters = config['filters']
-    filters.insert(0, num_nucleotides*4)
+    filters.insert(0, len_seqs)
     filters.insert(len(filters), num_outputs)
     mlp = MLP(filters=filters, dropout=config['dropout'])
     mlp.to(device)
@@ -300,16 +304,16 @@ if __name__ == '__main__':
     hyperparameter_defaults = dict(
         in_cols='seq_SwitchON_GFP',
         out_cols=['ON'],
-        qc_level=0.7,
+        qc_level=1.1,
         scaler_init=True,
         epochs=200,
-        filters=[256, 128, 64, 32],
+        filters=[128, 64, 32],
         optimizer='adam',
         loss_fn='mae',
         learning_rate=0.00075,
         weight_decay=0.000005,
         epsilon=0.00000001,
-        dropout=0.1,
+        dropout=0.3,
         batch_size=64
     )
 

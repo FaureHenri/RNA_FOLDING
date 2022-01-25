@@ -12,24 +12,24 @@ parameters:
   out_cols:
     value: ['ON', 'OFF']
   qc_level:
-    values: [0.7, 1.1]
+    values: [0.7, 1.1, 1.5]
   scaler_init:
-    values: [True, False]
+    value: True
   epochs:
     value: 200
   filters:
-    values: [[128, 64, 32, 16], [256, 128, 64, 32, 16]]
+    values: [[128, 64, 32], [256, 128, 64, 32, 16]]
   optimizer:
     value: 'adam'
   loss_fn:
     value: 'mae'
   learning_rate:
-    values: [0.00075, 0.001]
+    value: 0.00075
   weight_decay:
     value: 0.0001
   epsilon:
     value: 0.001
   dropout:
-    values: [0.01, 0.1]
+    values: [0.1, 0.3]
   batch_size:
     value: 64

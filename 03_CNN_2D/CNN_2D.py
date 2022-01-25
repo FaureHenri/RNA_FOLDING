@@ -235,13 +235,13 @@ def validate(testloader, model, loss_fn, epoch, out_features):
             loss = loss_fn(outputs, targets)
             final_loss += loss.item()
 
-            current_r2 = r2_score(outputs.cpu(), targets.cpu(), multioutput='raw_values')
+            current_r2 = r2_score(targets.cpu(), outputs.cpu(), multioutput='raw_values')
             global_r2 = [sum(x) for x in zip(global_r2, current_r2)]
 
-            current_mse = mean_squared_error(outputs.cpu(), targets.cpu(), multioutput='raw_values')
+            current_mse = mean_squared_error(targets.cpu(), outputs.cpu(), multioutput='raw_values')
             global_mse = [sum(x) for x in zip(global_mse, current_mse)]
 
-            current_mae = mean_absolute_error(outputs.cpu(), targets.cpu(), multioutput='raw_values')
+            current_mae = mean_absolute_error(targets.cpu(), outputs.cpu(), multioutput='raw_values')
             global_mae = [sum(x) for x in zip(global_mae, current_mae)]
 
         final_loss = final_loss / (batch_idx + 1)
