@@ -66,29 +66,37 @@ def train_main(config):
 
     data_in, data_out = load_sequences_and_targets(in_cols=in_columns, out_cols=out_columns, qc_level=config['qc_level'])
 
-    X_train, X_test, y_train, y_test = train_test_split(data_in, data_out, train_size=0.75, random_state=1)
+    r2_list = []
+    for i in range(10):
+        np.random.seed(i)
 
-    reg = MLPRegressor(hidden_layer_sizes=(128, 64, 32), activation='relu', solver='adam', alpha=0.0001, batch_size=64,
-                       learning_rate_init=0.0005, learning_rate='adaptive', max_iter=100, early_stopping=True,
-                       n_iter_no_change=5, verbose=True)
-    reg.fit(X_train.values, y_train.values.ravel())
-    preds = reg.predict(X_test.values)
+        X_train, X_test, y_train, y_test = train_test_split(data_in, data_out, train_size=0.75, random_state=i)
 
-    r2 = r2_score(y_test.values.ravel(), preds, multioutput='raw_values')
-    print("R2 score:", r2)
+        reg = MLPRegressor(hidden_layer_sizes=(128, 64, 32), activation='relu', solver='adam', alpha=0.0001, batch_size=64,
+                           learning_rate_init=0.0005, learning_rate='adaptive', max_iter=50, early_stopping=True,
+                           n_iter_no_change=2, verbose=True)
+        reg.fit(X_train.values, y_train.values.ravel())
+        preds = reg.predict(X_test.values)
 
-    mse = mean_squared_error(y_test.values.ravel(), preds, multioutput='raw_values')
-    print("MSE score:", mse)
+        r2 = r2_score(y_test.values.ravel(), preds, multioutput='raw_values')
+        r2_list.append(r2)
+        print("R2 score:", r2)
 
-    mae = mean_absolute_error(y_test.values.ravel(), preds, multioutput='raw_values')
-    print("MAE score:", mae)
+        mse = mean_squared_error(y_test.values.ravel(), preds, multioutput='raw_values')
+        print("MSE score:", mse)
+
+        mae = mean_absolute_error(y_test.values.ravel(), preds, multioutput='raw_values')
+        print("MAE score:", mae)
+
+    return r2_list
 
 
 if __name__ == '__main__':
     hyperparameter_defaults = dict(
-        in_cols=['trigger', 'loop1', 'switch', 'loop2', 'stem1', 'atg', 'stem2', 'linker', 'post_linker'],
+        in_cols=['switch'],
         out_cols=['ON'],
         qc_level=1.1,
     )
 
-    train_main(hyperparameter_defaults)
+    r2_scores = train_main(hyperparameter_defaults)
+    print(r2_scores)
