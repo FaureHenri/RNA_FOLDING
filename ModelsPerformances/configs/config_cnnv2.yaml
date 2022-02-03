@@ -1,0 +1,14 @@
+parameters:
+  data: '/rds/general/user/hf721/ephemeral/RNA_DATASET'
+  qc_level: 1.1
+  epochs: 200
+  filters: [128, 64, 32]
+  optimizer: 'adam'
+  loss_fn: 'mse'
+  learning_rate: 0.001
+  weight_decay: 0.000005
+  epsilon: 0.00000001
+  dropout: 0.3
+  batch_size: 32
+  num_workers: 4
+  seed: 123
