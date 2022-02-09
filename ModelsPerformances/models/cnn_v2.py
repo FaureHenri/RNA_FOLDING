@@ -5,8 +5,8 @@ import random
 from sklearn.model_selection import train_test_split
 import torch
 from torch.utils.data import Dataset, DataLoader
-from ModelsPerformances.utils import launch_train
-from cnn import CNNet, criterion_mse
+from utils import launch_train
+from models.cnn import CNNet, criterion_mse
 
 
 class RNADataset(Dataset):
