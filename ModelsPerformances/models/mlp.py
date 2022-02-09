@@ -5,7 +5,7 @@ from sklearn.model_selection import train_test_split
 import torch
 from torch import nn
 from torch.utils.data import Dataset, DataLoader
-from ModelsPerformances.utils import load_sequences_and_targets, launch_train
+from utils import load_sequences_and_targets, launch_train
 
 
 class RNADataset(Dataset):
