@@ -1,6 +1,6 @@
 parameters:
-  data: '/rds/general/user/hf721/home/RNA_Kinetics/data/Toehold_Dataset_Final_2019-10-23.csv'
-  in_cols: ['switch']
+  data: '/rds/general/user/hf721/home/RNA_Kinetics/00_data/Toehold_Dataset_Final_2019-10-23.csv'
+  in_cols: ['seq_SwitchON_GFP']
   out_cols: ['ON']
   qc_level: 1.1
   scaler_init: True

@@ -1,5 +1,7 @@
 parameters:
   data: '/rds/general/user/hf721/ephemeral/RNA_DATASET'
+  in_cols: ['seq_SwitchON_GFP']
+  out_cols: ['ON']
   qc_level: 1.1
   epochs: 200
   filters: [128, 64, 32]
