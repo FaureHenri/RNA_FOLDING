@@ -15,7 +15,7 @@ def get_config(config):
 
 # Helper function one hot encode rna sequences
 def rna2onehot(seq):
-    seq = 'GGG' + seq
+    # seq = 'GGG' + seq
     onehot_map = {'A': [1, 0, 0, 0],
                   'U': [0, 1, 0, 0],
                   'C': [0, 0, 1, 0],
@@ -26,7 +26,7 @@ def rna2onehot(seq):
     return onehot_encoded_seq
 
 
-# Helper function to load rna sequences and translation inition rates
+# Helper function to load rna sequences and translation initiation rates
 def load_sequences_and_targets(data_path, in_cols, out_cols, qc_level=1.1):
     data = pd.read_csv(data_path)
 
