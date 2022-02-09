@@ -6,7 +6,7 @@ from sklearn.model_selection import train_test_split
 import torch
 from torch import nn
 from torch.utils.data import Dataset, DataLoader
-from ModelsPerformances.utils import load_sequences_and_targets, launch_train, creatmat
+from utils import load_sequences_and_targets, launch_train, creatmat
 
 
 class RNADataset(Dataset):
@@ -114,8 +114,8 @@ def train_main(config):
     data_out = scaler.fit_transform(data_out)
 
     X_train, X_test, y_train, y_test = train_test_split(data_in, data_out, train_size=0.75, random_state=seed)
-    rna_train = RNADataset(X_train.to_numpy(), y_train)
-    rna_test = RNADataset(X_test.to_numpy(), y_test)
+    rna_train = RNADataset(X_train.to_numpy(), y_train, 7)
+    rna_test = RNADataset(X_test.to_numpy(), y_test, 7)
     print(f'length of train set: {len(rna_train)}\nlength of validation set: {len(rna_test)}')
 
     train_loader = DataLoader(rna_train, batch_size=config['batch_size'], shuffle=True, num_workers=config['num_workers'])
