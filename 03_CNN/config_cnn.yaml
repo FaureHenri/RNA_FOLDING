@@ -1,4 +1,0 @@
-parameters:
-  in_cols: 'seq_SwitchON_GFP'
-  out_cols: ['ON', 'OFF']
-  qc_level: 1.1

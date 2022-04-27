@@ -1,0 +1,3 @@
+
+wandb sweep PerfModels/wandb/cnn_wandb.yaml -p mlp_project
+wandb agent

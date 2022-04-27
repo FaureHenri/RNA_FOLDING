@@ -1,3 +1,0 @@
->smallpox_tile_23043
-GGGAACCAAACACACAAACGCACCGUAGACGAUGAUUCGUUGAUAAUUUAUUCAACAGAGGAGAGAAUAAAUGAUCAACGAAAACCUGGCGGCAGCGCAAAAGAUGCGUAAAGGAGAA
-......................((((.........(((((((((.((((((((...........)))))))).)))))))))......))))..(((((.....))))).........
